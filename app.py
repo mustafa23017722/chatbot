@@ -1,5 +1,5 @@
-# app.py - HYBRID APPROACH
-from flask import Flask, render_template, request, jsonify
+import os
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
 import time
@@ -7,70 +7,26 @@ import time
 app = Flask(__name__)
 CORS(app)
 
-OLLAMA_URL = "http://localhost:11434"
+# Serve static files from root
+@app.route('/<path:filename>')
+def serve_static(filename):
+    if filename == 'style.css':
+        return send_from_directory('.', 'style.css')
+    return send_from_directory('templates', filename)
 
+# Serve main page
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+# Your complete HybridGazaAssistant class
 class HybridGazaAssistant:
     def __init__(self):
         self.last_topic = None
         self.is_ollama_ready = False
-        self.check_ollama()
+        # Disable Ollama check for production
+        print("ℹ️ Using rule-based responses only")
     
-    def check_ollama(self):
-        """Check if Ollama is available for conversation"""
-        try:
-            response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
-            if response.status_code == 200:
-                models = response.json().get('models', [])
-                llama_loaded = any('llama3.2' in model.get('name', '') for model in models)
-                if llama_loaded:
-                    self.is_ollama_ready = True
-                    print("✅ Llama 3.2 available for conversation")
-                else:
-                    print("⚠️ Llama 3.2 not loaded - using rule-based only")
-        except Exception as e:
-            print(f"❌ Ollama not available: {e} - using rule-based responses")
-    
-    def get_llama_conversation(self, user_input):
-        """Use Llama for natural conversation"""
-        try:
-            messages = [
-                {
-                    "role": "system", 
-                    "content": """You are GAZA 101 - a friendly, compassionate AI assistant. 
-                    You're having a normal conversation with a user. Be warm, natural, and engaging.
-                    Use emojis occasionally. Keep responses under 2 sentences for quick chatting."""
-                },
-                {
-                    "role": "user",
-                    "content": user_input
-                }
-            ]
-            
-            response = requests.post(
-                f"{OLLAMA_URL}/api/chat",
-                json={
-                    "model": "llama3.2:latest",
-                    "messages": messages,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.8,
-                        "top_p": 0.9,
-                        "max_tokens": 150
-                    }
-                },
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                return response.json()['message']['content']
-            else:
-                return None
-                
-        except Exception as e:
-            print(f"Llama conversation error: {e}")
-            return None
-
-    # KEEP ALL THE RULE-BASED TECHNICAL RESPONSES FROM BEFORE
     def get_problem_description(self, topic):
         """Provide problem description only - RULE BASED"""
         problems = {
@@ -262,33 +218,6 @@ class HybridGazaAssistant:
             return 'infrastructure'
         else:
             return None
-    
-    def is_conversational_query(self, user_input):
-        """Check if this is a normal conversation vs technical query"""
-        user_lower = user_input.lower().strip()
-        
-        conversational_phrases = [
-            'how are you', 'how are you doing', 'can we talk', 'let\'s talk', 
-            'talk to you', 'what can you do', 'thank you', 'thanks', 
-            'who are you', 'what are you', 'joke', 'funny', 'hello', 
-            'hi', 'hey', 'greetings', 'how do you feel', 'what\'s up',
-            'good morning', 'good afternoon', 'good evening', 'how old are you',
-            'where are you from', 'are you human', 'do you sleep'
-        ]
-        
-        # Single word greetings
-        if user_lower in ['hi', 'hello', 'hey']:
-            return True
-            
-        # Check for conversational phrases
-        if any(phrase in user_lower for phrase in conversational_phrases):
-            return True
-            
-        # Short messages (3 words or less) are likely conversational
-        if len(user_lower.split()) <= 3:
-            return True
-            
-        return False
 
     def get_response(self, user_input):
         user_lower = user_input.lower().strip()
@@ -308,14 +237,7 @@ Hi! I'm your AI assistant with **hybrid intelligence**:
 
 **Or we can have natural conversations!** 😊"""
         
-        # STRATEGY 1: Use Llama for natural conversation
-        if self.is_conversational_query(user_input) and self.is_ollama_ready:
-            llama_response = self.get_llama_conversation(user_input)
-            if llama_response:
-                print("✅ Using Llama for conversation")
-                return llama_response
-        
-        # STRATEGY 2: Rule-based for technical accuracy
+        # STRATEGY: Rule-based for technical accuracy
         topic = self.detect_topic(user_input)
         
         # Handle "yes" to provide solutions
@@ -327,11 +249,6 @@ Hi! I'm your AI assistant with **hybrid intelligence**:
         # Handle "no" or decline
         if any(word in user_lower for word in ['no', 'not now', 'later', 'maybe later']) and self.last_topic:
             self.last_topic = None
-            # Try Llama for friendly response
-            if self.is_ollama_ready:
-                llama_response = self.get_llama_conversation("The user said no to solutions, give a friendly response to move on")
-                if llama_response:
-                    return llama_response
             return "No problem! 😊 What would you like to discuss instead?"
         
         # Provide problem description for detected topics
@@ -340,29 +257,23 @@ Hi! I'm your AI assistant with **hybrid intelligence**:
             problem_text = self.get_problem_description(topic)
             return problem_text + "\n\n**Would you like me to provide specific solutions for this challenge?**"
         
-        # STRATEGY 3: Fallback - Use Llama if available, else rule-based
-        if self.is_ollama_ready:
-            llama_response = self.get_llama_conversation(user_input)
-            if llama_response:
-                return llama_response
-        
-        # Final fallback - rule-based friendly response
+        # Final fallback - friendly response
         return """😊 **I'm Here to Help!**
 
 I combine AI intelligence with accurate technical knowledge:
 
-💬 **Natural Conversations** - Powered by Llama AI
+💬 **Natural Conversations** - Powered by AI
 🔧 **Technical Solutions** - Verified crisis data  
 ⚡ **Fast Responses** - Hybrid approach
 
-You can ask me about humanitarian challenges, or we can just chat naturally!"""
+You can ask me about:
+💧 Water crisis | 🌾 Food security | 🏥 Healthcare 
+⚡ Energy solutions | 🏗️ Infrastructure | 🌍 Environmental issues
+
+What would you like to know about?"""
 
 # Initialize assistant
 assistant = HybridGazaAssistant()
-
-@app.route('/')
-def home():
-    return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -387,9 +298,12 @@ def chat():
         print(f"Error: {e}")
         return jsonify({'response': 'Hello! I\'m GAZA 101. How can I help you today?'})
 
+@app.route('/health')
+def health():
+    return jsonify({"status": "healthy"})
+
 if __name__ == '__main__':
-    print("🚀 Starting HYBRID GAZA 101 Assistant...")
-    print("💬 Llama 3.2 for natural conversation")
-    print("📋 Rule-based for technical accuracy") 
-    print("📍 Server running at: http://localhost:7860")
-    app.run(debug=True, host='0.0.0.0', port=7860)
+    port = int(os.environ.get("PORT", 7860))
+    print(f"🚀 Starting HYBRID GAZA 101 Assistant...")
+    print(f"📍 Server running at: http://0.0.0.0:{port}")
+    app.run(debug=False, host='0.0.0.0', port=port)
