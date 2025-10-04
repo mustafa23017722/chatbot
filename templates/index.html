@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAZA 101 - Crisis Response System</title>
+    <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="nasa-logo">G101</div>
+            <div>
+                <h1>GAZA 101 Crisis Response</h1>
+                <div class="subtitle">Aurora Intelligence</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="chat-interface">
+            <div class="chat-messages" id="chat-box">
+                <!-- Chat messages will appear here -->
+            </div>
+
+            <div class="typing-indicator" id="typing">
+                <span>Analyzing</span>
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="user-input" placeholder="Ask about water, food, health, energy, or CO2 challenges..." autocomplete="off">
+                <button id="send-button" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const userInput = document.getElementById('user-input');
+        const typingIndicator = document.getElementById('typing');
+        const sendButton = document.getElementById('send-button');
+
+        // Auto-focus and send intro
+        window.onload = function() {
+            userInput.focus();
+            setTimeout(() => {
+                sendIntroMessage();
+            }, 500);
+        };
+
+        async function sendIntroMessage() {
+            try {
+                typingIndicator.style.display = 'block';
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: ''})
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    typingIndicator.style.display = 'none';
+                    addMessage(data.response, 'bot');
+                }
+            } catch (error) {
+                typingIndicator.style.display = 'none';
+                addMessage('🌍 GAZA 101 Crisis Assistant - Ready to analyze humanitarian challenges!', 'bot');
+            }
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            addMessage(message, 'user');
+            userInput.value = '';
+            sendButton.disabled = true;
+            typingIndicator.style.display = 'block';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: message})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                typingIndicator.style.display = 'none';
+                addMessage(data.response, 'bot');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                typingIndicator.style.display = 'none';
+                addMessage('Sorry, I encountered an error. Please try again.', 'bot');
+            }
+
+            sendButton.disabled = false;
+            userInput.focus();
+        }
+
+        function addMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            
+            const formattedText = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+            
+            messageDiv.innerHTML = formattedText;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        userInput.addEventListener('input', function() {
+            sendButton.disabled = userInput.value.trim() === '';
+        });
+    </script>
+</body>
+</html>
